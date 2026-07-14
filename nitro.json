@@ -1,0 +1,23 @@
+{
+  "cxxNamespace": ["nitroopenmap"],
+  "ios": {
+    "iosModuleName": "NitroOpenMap"
+  },
+  "android": {
+    "androidNamespace": ["nitroopenmap"],
+    "androidCxxLibName": "nitroopenmap"
+  },
+  "autolinking": {
+    "NitroOpenMap": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridNitroOpenMap"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridNitroOpenMap"
+      }
+    }
+  },
+  "ignorePaths": ["node_modules"]
+}
