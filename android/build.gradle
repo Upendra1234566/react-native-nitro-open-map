@@ -37,9 +37,9 @@ apply from: '../nitrogen/generated/android/nitroopenmap+autolinking.gradle'
 apply plugin: "com.facebook.react"
 
 android {
-  namespace "com.margelo.nitro.nitroopenmap"
+   namespace "com.margelo.nitro.nitroopenmap"
 
-  compileSdkVersion getExtOrDefault("compileSdkVersion")
+  compileSdk getExtOrDefault("compileSdkVersion")
 
   defaultConfig {
     minSdkVersion getExtOrDefault("minSdkVersion")
@@ -106,7 +106,14 @@ android {
   }
 }
 
+// dependencies {
+//   implementation "com.facebook.react:react-android"
+//   implementation project(":react-native-nitro-modules")
+// }
+
 dependencies {
   implementation "com.facebook.react:react-android"
   implementation project(":react-native-nitro-modules")
+
+  implementation "org.maplibre.gl:android-sdk:13.3.1"
 }

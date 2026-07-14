@@ -23,5 +23,8 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+      <meta-data
+    android:name="org.maplibre.android.renderer"
+    android:value="OPENGL" />
     </application>
 </manifest>

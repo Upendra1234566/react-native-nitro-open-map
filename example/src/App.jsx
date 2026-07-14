@@ -4,7 +4,7 @@ import { NitroOpenMapView } from 'react-native-nitro-open-map';
 export default function App() {
   return (
     <View style={styles.container}>
-      <NitroOpenMapView color="#32a852" style={styles.box} />
+      <NitroOpenMapView style={styles.map} color="#32a852" />
     </View>
   );
 }
@@ -12,12 +12,9 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  box: {
-    width: 60,
-    height: 60,
-    marginVertical: 20,
+
+  map: {
+    flex: 1,
   },
 });

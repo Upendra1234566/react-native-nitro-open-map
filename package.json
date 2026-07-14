@@ -46,10 +46,17 @@
     "build:web": "vite build"
   },
   "keywords": [
-    "react-native",
-    "ios",
-    "android"
-  ],
+  "react-native",
+  "react-native-maps",
+  "maplibre",
+  "maplibre-gl",
+  "maps",
+  "android",
+  "ios",
+  "nitro-modules",
+  "native-map",
+  "offline-map"
+],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Upendra1234566/react-native-nitro-open-map.git"
@@ -96,7 +103,7 @@
   "peerDependencies": {
     "react": "*",
     "react-native": "*",
-    "react-native-nitro-modules": "^0.36.1"
+    "react-native-nitro-modules": "*"
   },
   "workspaces": [
     "example"
