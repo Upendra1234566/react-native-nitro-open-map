@@ -26,7 +26,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - NitroOpenMap (0.1.0):
+  - NitroOpenMap (0.1.1):
     - hermes-engine
     - NitroModules
     - RCTRequired
@@ -2031,7 +2031,7 @@ SPEC CHECKSUMS:
   FBLazyVector: c00c20551d40126351a6783c47ce75f5b374851b
   hermes-engine: e4a96a1ba38a14c5d32f7f53136f290b677cb493
   NitroModules: b4174dd303728e16ad1afb79f64c1a5c69a3b373
-  NitroOpenMap: b7bd685059d043920001a48e378441eb8a366af2
+  NitroOpenMap: 4bbab46f110f81f0a29635919e6b4befb655bf4b
   RCTDeprecation: 3bb167081b134461cfeb875ff7ae1945f8635257
   RCTRequired: 74839f55d5058a133a0bc4569b0afec750957f64
   RCTSwiftUI: 87a316382f3eab4dd13d2a0d0fd2adcce917361a
@@ -2106,4 +2106,4 @@ SPEC CHECKSUMS:
 
 PODFILE CHECKSUM: fbc243917fac510001bbae543be17e35658a3340
 
-COCOAPODS: 1.15.2
+COCOAPODS: 1.16.2
