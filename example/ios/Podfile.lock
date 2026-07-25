@@ -3,6 +3,7 @@ PODS:
   - hermes-engine (250829098.0.10):
     - hermes-engine/Pre-built (= 250829098.0.10)
   - hermes-engine/Pre-built (250829098.0.10)
+  - MapLibre (6.28.0)
   - NitroModules (0.36.1):
     - hermes-engine
     - RCTRequired
@@ -28,6 +29,7 @@ PODS:
     - Yoga
   - NitroOpenMap (0.1.1):
     - hermes-engine
+    - MapLibre
     - NitroModules
     - RCTRequired
     - RCTTypeSafety
@@ -1874,6 +1876,10 @@ DEPENDENCIES:
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
+SPEC REPOS:
+  trunk:
+    - MapLibre
+
 EXTERNAL SOURCES:
   FBLazyVector:
     :path: "../node_modules/react-native/Libraries/FBLazyVector"
@@ -2030,8 +2036,9 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   FBLazyVector: c00c20551d40126351a6783c47ce75f5b374851b
   hermes-engine: e4a96a1ba38a14c5d32f7f53136f290b677cb493
+  MapLibre: 502506f9abd57330f11c19328217be3b121c3f13
   NitroModules: b4174dd303728e16ad1afb79f64c1a5c69a3b373
-  NitroOpenMap: 4bbab46f110f81f0a29635919e6b4befb655bf4b
+  NitroOpenMap: 593dbc503f9cb8e5354bef4ffaf1dae4324dd3a5
   RCTDeprecation: 3bb167081b134461cfeb875ff7ae1945f8635257
   RCTRequired: 74839f55d5058a133a0bc4569b0afec750957f64
   RCTSwiftUI: 87a316382f3eab4dd13d2a0d0fd2adcce917361a

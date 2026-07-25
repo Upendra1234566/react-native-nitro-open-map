@@ -1,3 +1,33 @@
+# require "json"
+
+# package = JSON.parse(File.read(File.join(__dir__, "package.json")))
+
+# Pod::Spec.new do |s|
+#   s.name         = "NitroOpenMap"
+#   s.version      = package["version"]
+#   s.summary      = package["description"]
+#   s.homepage     = package["homepage"]
+#   s.license      = package["license"]
+#   s.authors      = package["author"]
+
+#   s.platforms    = { :ios => min_ios_version_supported }
+#   s.source       = { :git => "https://github.com/Upendra1234566/react-native-nitro-open-map.git", :tag => "#{s.version}" }
+
+#   s.source_files = [
+#     "ios/**/*.{swift}",
+#     "ios/**/*.{m,mm}",
+#     "cpp/**/*.{hpp,cpp}",
+#   ]
+
+#   s.dependency 'React-jsi'
+#   s.dependency 'React-callinvoker'
+
+#   load 'nitrogen/generated/ios/NitroOpenMap+autolinking.rb'
+#   add_nitrogen_files(s)
+
+#   install_modules_dependencies(s)
+# end
+
 require "json"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
@@ -21,6 +51,9 @@ Pod::Spec.new do |s|
 
   s.dependency 'React-jsi'
   s.dependency 'React-callinvoker'
+  
+  # Niche wali line add ki gayi hai MapLibre error theek karne ke liye
+  s.dependency 'MapLibre'
 
   load 'nitrogen/generated/ios/NitroOpenMap+autolinking.rb'
   add_nitrogen_files(s)
