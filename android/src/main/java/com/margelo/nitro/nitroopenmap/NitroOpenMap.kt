@@ -12,6 +12,7 @@ import androidx.core.graphics.toColorInt
 import com.facebook.proguard.annotations.DoNotStrip
 import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.uimanager.ThemedReactContext
+import com.margelo.nitro.core.Promise
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -28,7 +29,7 @@ import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.style.sources.GeoJsonOptions
-import org.maplibre.android.style.expressions.Expression.get
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.permissions.PermissionsManager
 import org.maplibre.android.gestures.MoveGestureDetector
@@ -39,9 +40,8 @@ import org.maplibre.android.offline.OfflineManager
 import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
 import org.json.JSONObject
 import java.net.URL
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import kotlinx.coroutines.*
 
 @DoNotStrip
 class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroOpenMapSpec(), LifecycleEventListener {
@@ -50,6 +50,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
     private val mapView: MapView
     private var mapLibreMap: MapLibreMap? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var _color = "#FFFFFF"
     private var _latitude: Double? = null
@@ -62,12 +63,17 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
     private var _showUserLocation: Boolean = false
     private var _vehicleMarker: Marker? = null
     private var _fitBoundsCoords: List<LatLng>? = null
-    private var _polylines: List<Polyline> = emptyList()
+    private var _polylines: MutableList<Polyline> = mutableListOf()
     private var _polygons: List<Polygon> = emptyList()
+    private var _routeRequest: RouteRequest? = null
+    
+    // Callbacks & Listeners
     private var _onMarkerPress: ((String) -> Unit)? = null
     private var _onMarkerDragEnd: ((String, Double, Double) -> Unit)? = null
+    private var _onMapReady: (() -> Unit)? = null
+
     private var draggedMarkerId: String? = null
-    private var isMapReady = false
+    private var mapLoaded = false
 
     override val view: View get() = wrapperView
 
@@ -133,7 +139,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
         get() = _fitBoundsCoords?.map { com.margelo.nitro.nitroopenmap.LatLng(it.latitude, it.longitude) }?.toTypedArray()
         set(value) {
             _fitBoundsCoords = value?.map { LatLng(it.latitude, it.longitude) }
-            if (_fitBoundsCoords != null && _fitBoundsCoords!!.isNotEmpty()) {
+            if (!_fitBoundsCoords.isNullOrEmpty()) {
                 fitBounds(_fitBoundsCoords!!.map { com.margelo.nitro.nitroopenmap.LatLng(it.latitude, it.longitude) }.toTypedArray(), 100.0)
             }
         }
@@ -141,7 +147,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
     override var polylines: Array<Polyline>?
         get() = _polylines.toTypedArray()
         set(value) {
-            _polylines = value?.toList() ?: emptyList()
+            _polylines = value?.toMutableList() ?: mutableListOf()
             updatePolylines()
         }
 
@@ -152,6 +158,15 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
             updatePolygons()
         }
 
+    override var routeRequest: RouteRequest?
+        get() = _routeRequest
+        set(value) {
+            _routeRequest = value
+            if (value != null) {
+                fetchAndDrawRouteNative(value.originLat, value.originLng, value.destLat, value.destLng)
+            }
+        }
+
     override var onMarkerPress: ((String) -> Unit)?
         get() = _onMarkerPress
         set(value) { _onMarkerPress = value }
@@ -159,6 +174,15 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
     override var onMarkerDragEnd: ((String, Double, Double) -> Unit)?
         get() = _onMarkerDragEnd
         set(value) { _onMarkerDragEnd = value }
+
+    override var onMapReady: (() -> Unit)?
+        get() = _onMapReady
+        set(value) {
+            _onMapReady = value
+            if (mapLoaded) {
+                mainHandler.post { value?.invoke() }
+            }
+        }
 
     init {
         MapLibre.getInstance(context.applicationContext)
@@ -220,7 +244,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                                 PropertyFactory.circleStrokeWidth(2f),
                                 PropertyFactory.circleStrokeColor(Color.WHITE)
                             )
-                            .withFilter(org.maplibre.android.style.expressions.Expression.has("point_count"))
+                            .withFilter(Expression.has("point_count"))
                     )
 
                     style.addLayer(
@@ -232,7 +256,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                                 PropertyFactory.textAnchor(Property.TEXT_ANCHOR_CENTER),
                                 PropertyFactory.textJustify(Property.TEXT_JUSTIFY_CENTER)
                             )
-                            .withFilter(org.maplibre.android.style.expressions.Expression.has("point_count"))
+                            .withFilter(Expression.has("point_count"))
                     )
 
                     style.addLayer(
@@ -245,12 +269,12 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                                 PropertyFactory.textAnchor("top"),
                                 PropertyFactory.iconImage("{iconImage}"),
                                 PropertyFactory.iconSize(0.25f),
-                                PropertyFactory.iconRotate(get("rotation")),
+                                PropertyFactory.iconRotate(Expression.get("rotation")),
                                 PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                                 PropertyFactory.iconAllowOverlap(true),
                                 PropertyFactory.textAllowOverlap(false)
                             )
-                            .withFilter(org.maplibre.android.style.expressions.Expression.not(org.maplibre.android.style.expressions.Expression.has("point_count")))
+                            .withFilter(Expression.not(Expression.has("point_count")))
                     )
 
                     style.addSource(GeoJsonSource("vehicle-source"))
@@ -264,14 +288,15 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                                 PropertyFactory.textAnchor("top"),
                                 PropertyFactory.iconImage("{iconImage}"),
                                 PropertyFactory.iconSize(0.3f),
-                                PropertyFactory.iconRotate(get("rotation")),
+                                PropertyFactory.iconRotate(Expression.get("rotation")),
                                 PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                                 PropertyFactory.iconAllowOverlap(true),
                                 PropertyFactory.textAllowOverlap(false)
                             )
                     )
 
-                    isMapReady = true
+                    mapLoaded = true
+                    _onMapReady?.invoke()
                     updateCamera()
                     updateMarkers()
                     updateUserLocationState()
@@ -332,11 +357,118 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
         }
     }
 
+    override fun isMapReady(): Promise<Boolean> {
+        return Promise.resolved(mapLoaded)
+    }
+
+    override fun downloadOfflineRegion(
+        swLat: Double,
+        swLng: Double,
+        neLat: Double,
+        neLng: Double,
+        minZoom: Double,
+        maxZoom: Double,
+        regionName: String
+    ) {
+        val map = mapLibreMap ?: return
+        if (!mapLoaded) return
+
+        mainHandler.post {
+            map.style?.url?.let { styleUrl ->
+                val bounds = LatLngBounds.Builder()
+                    .include(LatLng(neLat, neLng))
+                    .include(LatLng(swLat, swLng))
+                    .build()
+
+                val definition = OfflineTilePyramidRegionDefinition(
+                    styleUrl,
+                    bounds,
+                    minZoom,
+                    maxZoom,
+                    context.resources.displayMetrics.density
+                )
+
+                val metadataJson = JSONObject().apply {
+                    put("NAME", regionName)
+                }
+                val metadata = metadataJson.toString().toByteArray(Charsets.UTF_8)
+
+                val offlineManager = OfflineManager.getInstance(context.applicationContext)
+                offlineManager.createOfflineRegion(
+                    definition,
+                    metadata,
+                    object : OfflineManager.CreateOfflineRegionCallback {
+                        override fun onCreate(offlineRegion: OfflineRegion) {
+                            offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
+                            offlineRegion.setObserver(object : OfflineRegion.OfflineRegionObserver {
+                                override fun onStatusChanged(status: OfflineRegionStatus) {
+                                    if (status.isComplete) {
+                                        // Download complete logic if needed
+                                    }
+                                }
+                                override fun onError(error: OfflineRegionError) {}
+                                override fun mapboxTileCountLimitExceeded(limit: Long) {}
+                            })
+                        }
+                        override fun onError(error: String) {}
+                    }
+                )
+            }
+        }
+    }
+
+    private fun fetchAndDrawRouteNative(originLat: Double, originLng: Double, destLat: Double, destLng: Double) {
+        if (!mapLoaded) return
+
+        coroutineScope.launch(Dispatchers.IO) {
+            try {
+                val urlStr = "https://router.project-osrm.org/route/v1/driving/$originLng,$originLat;$destLng,$destLat?geometries=geojson&overview=full"
+                val url = URL(urlStr)
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+
+                if (connection.responseCode == 200) {
+                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                    val json = JSONObject(response)
+                    val routes = json.optJSONArray("routes")
+
+                    if (routes != null && routes.length() > 0) {
+                        val route = routes.getJSONObject(0)
+                        val geometry = route.getJSONObject("geometry")
+                        val coordinates = geometry.getJSONArray("coordinates")
+
+                        val routeCoords = ArrayList<com.margelo.nitro.nitroopenmap.LatLng>()
+                        for (i in 0 until coordinates.length()) {
+                            val pt = coordinates.getJSONArray(i)
+                            routeCoords.add(com.margelo.nitro.nitroopenmap.LatLng(pt.getDouble(1), pt.getDouble(0)))
+                        }
+
+                        val newPoly = Polyline(
+                            id = "osrm_route_${System.currentTimeMillis()}",
+                            coordinates = routeCoords.toTypedArray(),
+                            color = "#3388FF",
+                            width = 6.0
+                        )
+
+                        _polylines.removeAll { it.id?.startsWith("osrm_route_") == true }
+                        _polylines.add(newPoly)
+                        
+                        withContext(Dispatchers.Main) {
+                            updatePolylines()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     private fun updateCamera() {
         val map = mapLibreMap ?: return
         val lat = _latitude ?: return
         val lng = _longitude ?: return
-        if (!isMapReady) return
+        if (!mapLoaded) return
         mainHandler.post {
             val position = CameraPosition.Builder()
                 .target(LatLng(lat, lng))
@@ -350,7 +482,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
 
     override fun animateCamera(latitude: Double, longitude: Double, zoom: Double?, durationMs: Double?) {
         val map = mapLibreMap ?: return
-        if (!isMapReady) return
+        if (!mapLoaded) return
         val targetZoom = zoom ?: _zoom
         val duration = durationMs?.toInt() ?: 1000
 
@@ -367,7 +499,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
 
     override fun fitBounds(coordinates: Array<com.margelo.nitro.nitroopenmap.LatLng>, padding: Double?) {
         val map = mapLibreMap ?: return
-        if (!isMapReady || coordinates.isEmpty()) return
+        if (!mapLoaded || coordinates.isEmpty()) return
         val pad = padding?.toInt() ?: 100
 
         mainHandler.post {
@@ -386,68 +518,8 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
         }
     }
 
-    override fun downloadOfflineRegion(
-        swLat: Double,
-        swLng: Double,
-        neLat: Double,
-        neLng: Double,
-        minZoom: Double,
-        maxZoom: Double,
-        regionName: String
-    ) {
-        val map = mapLibreMap ?: return
-        if (!isMapReady) return
-
-        mainHandler.post {
-            map.style?.url?.let { styleUrl ->
-                val bounds = LatLngBounds.Builder()
-                    .include(LatLng(neLat, neLng))
-                    .include(LatLng(swLat, swLng))
-                    .build()
-
-                val definition = OfflineTilePyramidRegionDefinition(
-                    styleUrl,
-                    bounds,
-                    minZoom,
-                    maxZoom,
-                    context.resources.displayMetrics.density
-                )
-
-                val metadataJson = JSONObject()
-                try {
-                    metadataJson.put("NAME", regionName)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-                val metadata = metadataJson.toString().toByteArray(Charsets.UTF_8)
-
-                val offlineManager = OfflineManager.getInstance(context.applicationContext)
-                offlineManager.createOfflineRegion(
-                    definition,
-                    metadata,
-                    object : OfflineManager.CreateOfflineRegionCallback {
-                        override fun onCreate(offlineRegion: OfflineRegion) {
-                            offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
-                            offlineRegion.setObserver(object : OfflineRegion.OfflineRegionObserver {
-                                override fun onStatusChanged(status: OfflineRegionStatus) {
-                                    if (status.isComplete) {
-                                        // Offline region successfully downloaded & cached!
-                                    }
-                                }
-                                override fun onError(error: OfflineRegionError) {}
-                                override fun mapboxTileCountLimitExceeded(limit: Long) {}
-                            })
-                        }
-                        override fun onError(error: String) {}
-                    }
-                )
-            }
-        }
-    }
-
     private fun updateMarkers() {
-        if (!isMapReady) return
-        
+        if (!mapLoaded) return
         _markers.forEach { marker ->
             val img = marker.iconImage
             if (!img.isNullOrEmpty() && (img.startsWith("http://") || img.startsWith("https://"))) {
@@ -489,8 +561,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
 
     private fun updateVehicleMarker() {
         val vehicle = _vehicleMarker ?: return
-        if (!isMapReady) return
-
+        if (!mapLoaded) return
         val img = vehicle.iconImage
         if (!img.isNullOrEmpty() && (img.startsWith("http://") || img.startsWith("https://"))) {
             downloadAndAddImage(img)
@@ -525,7 +596,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
     }
 
     private fun updatePolylines() {
-        if (!isMapReady) return
+        if (!mapLoaded) return
         val features = _polylines.joinToString(separator = ",", prefix = "{ \"type\": \"FeatureCollection\", \"features\": [", postfix = "] }") { poly ->
             val coordsStr = poly.coordinates.joinToString(separator = ",") { "[${it.longitude}, ${it.latitude}]" }
             """
@@ -549,10 +620,9 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                 
                 val layer = style.getLayerAs<LineLayer>("polyline-layer")
                 if (_polylines.isNotEmpty()) {
-                    val firstPoly = _polylines.first()
-                    val polyColor = if (firstPoly.color.isNullOrEmpty()) "#FF0000" else firstPoly.color!!
-                    val polyWidth = (firstPoly.width?.toFloat() ?: 5f)
-                    
+                    val lastPoly = _polylines.last()
+                    val polyColor = if (lastPoly.color.isNullOrEmpty()) "#3388FF" else lastPoly.color!!
+                    val polyWidth = (lastPoly.width?.toFloat() ?: 5f)
                     try {
                         layer?.setProperties(
                             PropertyFactory.lineColor(Color.parseColor(polyColor)),
@@ -565,7 +635,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
     }
 
     private fun updatePolygons() {
-        if (!isMapReady) return
+        if (!mapLoaded) return
         val features = _polygons.joinToString(separator = ",", prefix = "{ \"type\": \"FeatureCollection\", \"features\": [", postfix = "] }") { poly ->
             val coords = poly.coordinates.toMutableList()
             if (coords.isNotEmpty() && (coords.first().latitude != coords.last().latitude || coords.first().longitude != coords.last().longitude)) {
@@ -596,7 +666,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                     val firstPoly = _polygons.first()
                     val fillColor = if (firstPoly.fillColor.isNullOrEmpty()) "#33FF0000" else firstPoly.fillColor!!
                     val strokeColor = if (firstPoly.strokeColor.isNullOrEmpty()) "#FF0000" else firstPoly.strokeColor!!
-
                     try {
                         layer?.setProperties(
                             PropertyFactory.fillColor(Color.parseColor(fillColor)),
@@ -610,7 +679,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
 
     private fun updateUserLocationState() {
         val map = mapLibreMap ?: return
-        if (!isMapReady) return
+        if (!mapLoaded) return
         mainHandler.post {
             map.getStyle { style ->
                 if (_showUserLocation) {
@@ -621,9 +690,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                                 LocationComponentActivationOptions.builder(context, style).build()
                             )
                             locationComponent.isLocationComponentEnabled = true
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
+                        } catch (e: Exception) { e.printStackTrace() }
                     }
                 } else {
                     try {
@@ -639,12 +706,12 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
     private fun downloadAndAddImage(urlStr: String) {
         mapLibreMap?.getStyle { style ->
             if (style.getImage(urlStr) == null) {
-                CoroutineScope(Dispatchers.IO).launch {
+                coroutineScope.launch(Dispatchers.IO) {
                     try {
                         val url = URL(urlStr)
                         val bmp = BitmapFactory.decodeStream(url.openConnection().getInputStream())
                         if (bmp != null) {
-                            mainHandler.post {
+                            withContext(Dispatchers.Main) {
                                 mapLibreMap?.getStyle { currentStyle ->
                                     if (currentStyle.getImage(urlStr) == null) {
                                         currentStyle.addImage(urlStr, bmp)
@@ -654,9 +721,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                                 }
                             }
                         }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+                    } catch (e: Exception) { e.printStackTrace() }
                 }
             }
         }
@@ -664,9 +729,14 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
 
     override fun onHostResume() { mainHandler.post { mapView.onResume() } }
     override fun onHostPause() { mainHandler.post { mapView.onPause() } }
-    override fun onHostDestroy() { mainHandler.post { mapView.onDestroy() } }
+    override fun onHostDestroy() { 
+        coroutineScope.cancel()
+        mainHandler.post { mapView.onDestroy() } 
+    }
+    
     override fun onDropView() {
         context.removeLifecycleEventListener(this)
+        coroutineScope.cancel()
         mainHandler.post { mapView.onDestroy() }
         super.onDropView()
     }

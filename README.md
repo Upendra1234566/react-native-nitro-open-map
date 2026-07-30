@@ -14,7 +14,7 @@ Built for developers who need a lightweight and high-performance alternative for
 ✅ High performance native map view  
 ✅ Offline map support through MapLibre ecosystem  
 ✅ Android support  
-✅ TypeScript support  
+✅ TypeScript support
 
 ## 🚧 Coming Soon
 
@@ -37,13 +37,13 @@ The following features are under active development:
 
 ```bash
 npm install react-native-nitro-open-map react-native-nitro-modules
-OR 
+OR
 yarn add react-native-nitro-open-map react-native-nitro-modules
 
 Requirements
 React Native >= 0.76
 Node >= 18
-React Native New Architecture enabled 
+React Native New Architecture enabled
 `
 
 
@@ -84,3 +84,4 @@ const styles = StyleSheet.create({
 License
 
 MIT © Upendra Singh
+```

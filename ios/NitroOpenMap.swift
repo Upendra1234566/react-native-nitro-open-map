@@ -148,7 +148,7 @@
 //     mapLibreMap = style
 //     isMapReady = true
 
-//     // Yahan hum native iOS system icon ki jagah properly draw ki hui image pass karenge
+//     // Set Default Image for fallback
 //     style.setImage(createDefaultMarkerImage(), forName: "default_marker_icon")
 
 //     setupLayersAndSources(style: style)
@@ -163,19 +163,19 @@
 //     }
 //   }
 
-//   // Helper to generate a solid default marker image that Metal/OpenGL can easily render
+//   // Bada aur prominent fallback image taaki 0.25/0.3 scale hone par gayab na ho
 //   private func createDefaultMarkerImage() -> UIImage {
-//     let size = CGSize(width: 32, height: 32)
+//     let size = CGSize(width: 250, height: 250)
 //     UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
 //     guard let context = UIGraphicsGetCurrentContext() else { return UIImage() }
     
-//     // Simple red circle with white stroke
-//     context.setFillColor(UIColor.red.cgColor)
-//     context.fillEllipse(in: CGRect(x: 2, y: 2, width: 28, height: 28))
+//     // Outer White Border (taaki map ke background me mix na ho)
+//     context.setFillColor(UIColor.white.cgColor)
+//     context.fillEllipse(in: CGRect(x: 10, y: 10, width: 230, height: 230))
     
-//     context.setStrokeColor(UIColor.white.cgColor)
-//     context.setLineWidth(2.0)
-//     context.strokeEllipse(in: CGRect(x: 2, y: 2, width: 28, height: 28))
+//     // Inner Bright Red Circle
+//     context.setFillColor(UIColor.red.cgColor)
+//     context.fillEllipse(in: CGRect(x: 35, y: 35, width: 180, height: 180))
     
 //     let image = UIGraphicsGetImageFromCurrentImageContext()
 //     UIGraphicsEndImageContext()
@@ -234,6 +234,11 @@
 //     markerLayer.iconRotationAlignment = NSExpression(forConstantValue: NSValue(mlnIconRotationAlignment: .map))
 //     markerLayer.iconAllowsOverlap = NSExpression(forConstantValue: true)
 //     markerLayer.textAllowsOverlap = NSExpression(forConstantValue: false)
+    
+//     // Image delay ho toh bhi Text show ho
+//     markerLayer.iconOptional = NSExpression(forConstantValue: true)
+//     markerLayer.textOptional = NSExpression(forConstantValue: true)
+    
 //     markerLayer.predicate = NSPredicate(format: "cluster != YES")
 //     style.addLayer(markerLayer)
 
@@ -250,6 +255,10 @@
 //     vehicleLayer.iconRotation = NSExpression(forKeyPath: "rotation")
 //     vehicleLayer.iconRotationAlignment = NSExpression(forConstantValue: NSValue(mlnIconRotationAlignment: .map))
 //     vehicleLayer.iconAllowsOverlap = NSExpression(forConstantValue: true)
+    
+//     vehicleLayer.iconOptional = NSExpression(forConstantValue: true)
+//     vehicleLayer.textOptional = NSExpression(forConstantValue: true)
+    
 //     style.addLayer(vehicleLayer)
 //   }
 
@@ -287,7 +296,6 @@
 //   private func updateCamera() {
 //     guard let lat = _latitude, let lng = _longitude, isMapReady else { return }
 //     DispatchQueue.main.async {
-//       // Set center without animation first to prevent conflicts
 //       self.mapView.setCenter(
 //         CLLocationCoordinate2D(latitude: lat, longitude: lng),
 //         zoomLevel: self._zoom ?? 12.0,
@@ -295,7 +303,6 @@
 //         animated: false
 //       )
       
-//       // Update camera pitch
 //       let camera = self.mapView.camera
 //       camera.pitch = CGFloat(self._tilt ?? 0.0)
 //       self.mapView.setCamera(camera, animated: false)
@@ -309,11 +316,7 @@
     
 //     DispatchQueue.main.async {
 //       let center = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-      
-//       // Align center quietly first
 //       self.mapView.setCenter(center, zoomLevel: targetZoom, direction: self._bearing ?? 0.0, animated: false)
-      
-//       // Create a smooth transition with the camera
 //       let camera = self.mapView.camera
 //       camera.pitch = CGFloat(self._tilt ?? 0.0)
 //       self.mapView.setCamera(camera, withDuration: TimeInterval(duration), animationTimingFunction: nil)
@@ -447,25 +450,19 @@
 //     mapView.showsUserLocation = _showUserLocation ?? false
 //   }
 
+//   // Safe Image Downloading Taaki Main Thread Par properly attach ho sake
 //   private func downloadAndAddImage(urlStr: String) {
 //     guard let style = mapView.style, style.image(forName: urlStr) == nil else { return }
     
-//     DispatchQueue.global().async {
+//     DispatchQueue.global(qos: .background).async {
 //       guard let url = URL(string: urlStr), 
 //             let data = try? Data(contentsOf: url), 
 //             let downloadedImage = UIImage(data: data) else { return }
       
-//       // Image ko standardize/rasterize karna taaki map engine render kar sake
-//       UIGraphicsBeginImageContextWithOptions(downloadedImage.size, false, downloadedImage.scale)
-//       downloadedImage.draw(at: .zero)
-//       let normalizedImage = UIGraphicsGetImageFromCurrentImageContext() ?? downloadedImage
-//       UIGraphicsEndImageContext()
-      
 //       DispatchQueue.main.async {
 //         if let currentStyle = self.mapView.style, currentStyle.image(forName: urlStr) == nil {
-//           currentStyle.setImage(normalizedImage, forName: urlStr)
+//           currentStyle.setImage(downloadedImage.withRenderingMode(.alwaysOriginal), forName: urlStr)
           
-//           // Image style me add hone ke baad markers ko re-render karo
 //           self.updateMarkers()
 //           self.updateVehicleMarker()
 //         }
@@ -473,11 +470,10 @@
 //     }
 //   }
 
-//   // MARK: - Powerful Color Parser (Handles #HEX, #AARRGGBB, rgb, rgba)
+//   // MARK: - Powerful Color Parser
 //   public func parseColor(_ colorStr: String) -> UIColor {
 //     let formattedStr = colorStr.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     
-//     // Parse rgba() or rgb()
 //     if formattedStr.hasPrefix("rgba") || formattedStr.hasPrefix("rgb") {
 //         let characterSet = CharacterSet(charactersIn: "0123456789.")
 //         let numbers = formattedStr.components(separatedBy: characterSet.inverted).filter { !$0.isEmpty }
@@ -491,7 +487,6 @@
 //         }
 //     }
     
-//     // Parse Hex colors
 //     var hex = formattedStr
 //     if hex.hasPrefix("#") {
 //         hex.removeFirst()
@@ -500,7 +495,6 @@
 //     var rgbValue: UInt64 = 0
 //     Scanner(string: hex).scanHexInt64(&rgbValue)
     
-//     // 8-character hex (#AARRGGBB or #RRGGBBAA depending on logic, treating as AARRGGBB standard here)
 //     if hex.count == 8 {
 //         return UIColor(
 //             red: CGFloat((rgbValue & 0x00FF0000) >> 16) / 255.0,
@@ -508,9 +502,7 @@
 //             blue: CGFloat(rgbValue & 0x000000FF) / 255.0,
 //             alpha: CGFloat((rgbValue & 0xFF000000) >> 24) / 255.0
 //         )
-//     } 
-//     // 6-character hex (#RRGGBB)
-//     else if hex.count == 6 {
+//     } else if hex.count == 6 {
 //         return UIColor(
 //             red: CGFloat((rgbValue & 0xFF0000) >> 16) / 255.0,
 //             green: CGFloat((rgbValue & 0x00FF00) >> 8) / 255.0,
@@ -519,7 +511,6 @@
 //         )
 //     }
     
-//     // Default fallback
 //     return UIColor.gray
 //   }
 // } 
@@ -531,11 +522,11 @@ import NitroModules
 // Delegate ko alag nikal diya taaki multiple inheritance (NSObject) ki error na aaye
 class MapLibreDelegateHelper: NSObject, MLNMapViewDelegate {
     weak var parent: HybridNitroOpenMap?
-    
+
     init(parent: HybridNitroOpenMap) {
         self.parent = parent
     }
-    
+
     func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
         parent?.onMapLoaded(style: style)
     }
@@ -547,7 +538,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   private var wrapperView: UIView
   private var mapView: MLNMapView
   private var mapLibreMap: MLNStyle? = nil
-  private var isMapReady = false
+  private var mapLoaded = false          // renamed from isMapReady (bool) to avoid clash with isMapReady() func
   private var draggedMarkerId: String? = nil
   private var mapDelegateHelper: MapLibreDelegateHelper!
 
@@ -564,7 +555,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
       DispatchQueue.main.async { self.wrapperView.backgroundColor = self.parseColor(newValue) }
     }
   }
-  
+
   private var _latitude: Double? = nil
   public var latitude: Double? {
     get { return _latitude }
@@ -594,7 +585,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
     get { return _tilt }
     set { _tilt = newValue; updateCamera() }
   }
-  
+
   private var _mapStyle: String? = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"
   public var mapStyle: String? {
     get { return _mapStyle }
@@ -629,7 +620,12 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   private var _fitBoundsCoords: [LatLng]? = nil
   public var fitBoundsCoords: [LatLng]? {
     get { return _fitBoundsCoords }
-    set { _fitBoundsCoords = newValue }
+    set {
+      _fitBoundsCoords = newValue
+      if let coords = newValue, !coords.isEmpty {
+        fitBounds(coordinates: coords, padding: 100.0)
+      }
+    }
   }
 
   private var _polylines: [Polyline]? = []
@@ -644,8 +640,37 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
     set { _polygons = newValue; DispatchQueue.main.async { self.updatePolygons() } }
   }
 
+  // MARK: - routeRequest (was missing)
+  private var _routeRequest: RouteRequest? = nil
+  public var routeRequest: RouteRequest? {
+    get { return _routeRequest }
+    set {
+      _routeRequest = newValue
+      if let req = newValue {
+        fetchAndDrawRouteNative(
+          originLat: req.originLat,
+          originLng: req.originLng,
+          destLat: req.destLat,
+          destLng: req.destLng
+        )
+      }
+    }
+  }
+
   public var onMarkerPress: ((String) -> Void)? = nil
   public var onMarkerDragEnd: ((String, Double, Double) -> Void)? = nil
+
+  // MARK: - onMapReady (was missing)
+  private var _onMapReady: (() -> Void)? = nil
+  public var onMapReady: (() -> Void)? {
+    get { return _onMapReady }
+    set {
+      _onMapReady = newValue
+      if mapLoaded {
+        DispatchQueue.main.async { newValue?() }
+      }
+    }
+  }
 
   // MARK: - Initialization
   public override init() {
@@ -653,9 +678,9 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
     mapView = MLNMapView(frame: .zero, styleURL: URL(string: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"))
     mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     wrapperView.addSubview(mapView)
-    
+
     super.init()
-    
+
     // Setting up the delegate via Helper
     mapDelegateHelper = MapLibreDelegateHelper(parent: self)
     mapView.delegate = mapDelegateHelper
@@ -668,16 +693,21 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
     mapView.addGestureRecognizer(longPressGesture)
   }
 
+  // MARK: - isMapReady() function required by spec (returns a Promise<Bool>)
+  public func isMapReady() -> Promise<Bool> {
+    return Promise.resolved(withResult: mapLoaded)
+  }
+
   // MARK: - Map Loaded & Helpers
   func onMapLoaded(style: MLNStyle) {
     mapLibreMap = style
-    isMapReady = true
+    mapLoaded = true
 
     // Set Default Image for fallback
     style.setImage(createDefaultMarkerImage(), forName: "default_marker_icon")
 
     setupLayersAndSources(style: style)
-    
+
     DispatchQueue.main.async {
       self.updateCamera()
       self.updateMarkers()
@@ -685,6 +715,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
       self.updatePolylines()
       self.updatePolygons()
       self.updateUserLocationState()
+      self._onMapReady?()
     }
   }
 
@@ -693,18 +724,18 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
     let size = CGSize(width: 250, height: 250)
     UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
     guard let context = UIGraphicsGetCurrentContext() else { return UIImage() }
-    
+
     // Outer White Border (taaki map ke background me mix na ho)
     context.setFillColor(UIColor.white.cgColor)
     context.fillEllipse(in: CGRect(x: 10, y: 10, width: 230, height: 230))
-    
+
     // Inner Bright Red Circle
     context.setFillColor(UIColor.red.cgColor)
     context.fillEllipse(in: CGRect(x: 35, y: 35, width: 180, height: 180))
-    
+
     let image = UIGraphicsGetImageFromCurrentImageContext()
     UIGraphicsEndImageContext()
-    
+
     return image ?? UIImage()
   }
 
@@ -759,11 +790,11 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
     markerLayer.iconRotationAlignment = NSExpression(forConstantValue: NSValue(mlnIconRotationAlignment: .map))
     markerLayer.iconAllowsOverlap = NSExpression(forConstantValue: true)
     markerLayer.textAllowsOverlap = NSExpression(forConstantValue: false)
-    
+
     // Image delay ho toh bhi Text show ho
     markerLayer.iconOptional = NSExpression(forConstantValue: true)
     markerLayer.textOptional = NSExpression(forConstantValue: true)
-    
+
     markerLayer.predicate = NSPredicate(format: "cluster != YES")
     style.addLayer(markerLayer)
 
@@ -780,10 +811,10 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
     vehicleLayer.iconRotation = NSExpression(forKeyPath: "rotation")
     vehicleLayer.iconRotationAlignment = NSExpression(forConstantValue: NSValue(mlnIconRotationAlignment: .map))
     vehicleLayer.iconAllowsOverlap = NSExpression(forConstantValue: true)
-    
+
     vehicleLayer.iconOptional = NSExpression(forConstantValue: true)
     vehicleLayer.textOptional = NSExpression(forConstantValue: true)
-    
+
     style.addLayer(vehicleLayer)
   }
 
@@ -791,7 +822,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
     let point = sender.location(in: mapView)
     let rect = CGRect(x: point.x - 25, y: point.y - 25, width: 50, height: 50)
     let features = mapView.visibleFeatures(in: rect, styleLayerIdentifiers: Set(["marker-layer", "vehicle-layer", "cluster-circle-layer"]))
-    
+
     if let feature = features.first, let markerId = feature.attribute(forKey: "id") as? String, !markerId.isEmpty {
       onMarkerPress?(markerId)
     }
@@ -802,7 +833,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
       let point = sender.location(in: mapView)
       let rect = CGRect(x: point.x - 30, y: point.y - 30, width: 60, height: 60)
       let features = mapView.visibleFeatures(in: rect, styleLayerIdentifiers: Set(["marker-layer"]))
-      
+
       if let feature = features.first,
          let markerId = feature.attribute(forKey: "id") as? String,
          let isDraggable = feature.attribute(forKey: "draggable") as? Bool,
@@ -819,7 +850,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   }
 
   private func updateCamera() {
-    guard let lat = _latitude, let lng = _longitude, isMapReady else { return }
+    guard let lat = _latitude, let lng = _longitude, mapLoaded else { return }
     DispatchQueue.main.async {
       self.mapView.setCenter(
         CLLocationCoordinate2D(latitude: lat, longitude: lng),
@@ -827,7 +858,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
         direction: self._bearing ?? 0.0,
         animated: false
       )
-      
+
       let camera = self.mapView.camera
       camera.pitch = CGFloat(self._tilt ?? 0.0)
       self.mapView.setCamera(camera, animated: false)
@@ -835,10 +866,10 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   }
 
   public func animateCamera(latitude: Double, longitude: Double, zoom: Double?, durationMs: Double?) {
-    guard isMapReady else { return }
+    guard mapLoaded else { return }
     let targetZoom = zoom ?? _zoom ?? 12.0
     let duration = durationMs != nil ? durationMs! / 1000.0 : 1.0
-    
+
     DispatchQueue.main.async {
       let center = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
       self.mapView.setCenter(center, zoomLevel: targetZoom, direction: self._bearing ?? 0.0, animated: false)
@@ -849,7 +880,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   }
 
   public func fitBounds(coordinates: [LatLng], padding: Double?) {
-    guard isMapReady, !coordinates.isEmpty else { return }
+    guard mapLoaded, !coordinates.isEmpty else { return }
     DispatchQueue.main.async {
       let coords = coordinates.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
       var bounds = MLNCoordinateBounds(sw: coords[0], ne: coords[0])
@@ -868,29 +899,68 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
     DispatchQueue.main.async {
       guard let styleURL = self.mapView.styleURL else { return }
       let bounds = MLNCoordinateBounds(sw: CLLocationCoordinate2D(latitude: swLat, longitude: swLng), ne: CLLocationCoordinate2D(latitude: neLat, longitude: neLng))
-      
+
       let region = MLNTilePyramidOfflineRegion(styleURL: styleURL, bounds: bounds, fromZoomLevel: minZoom, toZoomLevel: maxZoom)
       let contextData = regionName.data(using: .utf8)
-      
+
       MLNOfflineStorage.shared.addPack(for: region, withContext: contextData ?? Data()) { (pack, error) in
         pack?.resume()
       }
     }
   }
 
+  // MARK: - Route fetching (mirrors Android fetchAndDrawRouteNative)
+  private func fetchAndDrawRouteNative(originLat: Double, originLng: Double, destLat: Double, destLng: Double) {
+    guard mapLoaded else { return }
+
+    let urlStr = "https://router.project-osrm.org/route/v1/driving/\(originLng),\(originLat);\(destLng),\(destLat)?geometries=geojson&overview=full"
+    guard let url = URL(string: urlStr) else { return }
+
+    let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+      guard let self = self else { return }
+      guard let data = data, error == nil else { return }
+
+      do {
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let routes = json["routes"] as? [[String: Any]],
+              let firstRoute = routes.first,
+              let geometry = firstRoute["geometry"] as? [String: Any],
+              let coords = geometry["coordinates"] as? [[Double]] else { return }
+
+        let routeCoords: [LatLng] = coords.map { LatLng(latitude: $0[1], longitude: $0[0]) }
+
+        let newPoly = Polyline(
+          id: "osrm_route_\(Int(Date().timeIntervalSince1970))",
+          coordinates: routeCoords,
+          color: "#3388FF",
+          width: 6.0
+        )
+
+        DispatchQueue.main.async {
+          self._polylines?.removeAll { $0.id.hasPrefix("osrm_route_") }
+          self._polylines?.append(newPoly)
+          self.updatePolylines()
+        }
+      } catch {
+        print("Route parse error: \(error)")
+      }
+    }
+    task.resume()
+  }
+
   private func updateMarkers() {
-    guard isMapReady else { return }
+    guard mapLoaded else { return }
     let markersArray = _markers ?? []
-    
+
     for marker in markersArray {
       if let img = marker.iconImage, img.hasPrefix("http://") || img.hasPrefix("https://") {
         downloadAndAddImage(urlStr: img)
       }
     }
-    
+
     guard let style = mapView.style, let source = style.source(withIdentifier: "marker-source") as? MLNShapeSource else { return }
     var features: [MLNPointFeature] = []
-    
+
     for marker in markersArray {
       let feature = MLNPointFeature()
       feature.coordinate = CLLocationCoordinate2D(latitude: marker.latitude, longitude: marker.longitude)
@@ -911,12 +981,12 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   }
 
   private func updateVehicleMarker() {
-    guard let vehicle = _vehicleMarker, isMapReady else { return }
-    
+    guard let vehicle = _vehicleMarker, mapLoaded else { return }
+
     if let img = vehicle.iconImage, img.hasPrefix("http://") || img.hasPrefix("https://") {
       downloadAndAddImage(urlStr: img)
     }
-    
+
     guard let style = mapView.style, let source = style.source(withIdentifier: "vehicle-source") as? MLNShapeSource else { return }
     let feature = MLNPointFeature()
     feature.coordinate = CLLocationCoordinate2D(latitude: vehicle.latitude, longitude: vehicle.longitude)
@@ -930,7 +1000,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   }
 
   private func updatePolylines() {
-    guard let style = mapView.style, let source = style.source(withIdentifier: "polyline-source") as? MLNShapeSource, isMapReady else { return }
+    guard let style = mapView.style, let source = style.source(withIdentifier: "polyline-source") as? MLNShapeSource, mapLoaded else { return }
     var mPolylines: [MLNPolyline] = []
     let lines = _polylines ?? []
     for poly in lines {
@@ -939,8 +1009,8 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
       mPolylines.append(polyline)
     }
     source.shape = MLNShapeCollection(shapes: mPolylines)
-    
-    if let firstPoly = lines.first, let layer = style.layer(withIdentifier: "polyline-layer") as? MLNLineStyleLayer {
+
+    if let firstPoly = lines.last, let layer = style.layer(withIdentifier: "polyline-layer") as? MLNLineStyleLayer {
       if let colorStr = firstPoly.color, !colorStr.isEmpty {
         layer.lineColor = NSExpression(forConstantValue: parseColor(colorStr))
       }
@@ -951,7 +1021,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   }
 
   private func updatePolygons() {
-    guard let style = mapView.style, let source = style.source(withIdentifier: "polygon-source") as? MLNShapeSource, isMapReady else { return }
+    guard let style = mapView.style, let source = style.source(withIdentifier: "polygon-source") as? MLNShapeSource, mapLoaded else { return }
     var mPolygons: [MLNPolygon] = []
     let polys = _polygons ?? []
     for poly in polys {
@@ -960,7 +1030,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
       mPolygons.append(polygon)
     }
     source.shape = MLNShapeCollection(shapes: mPolygons)
-    
+
     if let firstPoly = polys.first, let layer = style.layer(withIdentifier: "polygon-layer") as? MLNFillStyleLayer {
       if let fillColor = firstPoly.fillColor, !fillColor.isEmpty {
         layer.fillColor = NSExpression(forConstantValue: parseColor(fillColor))
@@ -978,16 +1048,16 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   // Safe Image Downloading Taaki Main Thread Par properly attach ho sake
   private func downloadAndAddImage(urlStr: String) {
     guard let style = mapView.style, style.image(forName: urlStr) == nil else { return }
-    
+
     DispatchQueue.global(qos: .background).async {
-      guard let url = URL(string: urlStr), 
-            let data = try? Data(contentsOf: url), 
+      guard let url = URL(string: urlStr),
+            let data = try? Data(contentsOf: url),
             let downloadedImage = UIImage(data: data) else { return }
-      
+
       DispatchQueue.main.async {
         if let currentStyle = self.mapView.style, currentStyle.image(forName: urlStr) == nil {
           currentStyle.setImage(downloadedImage.withRenderingMode(.alwaysOriginal), forName: urlStr)
-          
+
           self.updateMarkers()
           self.updateVehicleMarker()
         }
@@ -998,11 +1068,11 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
   // MARK: - Powerful Color Parser
   public func parseColor(_ colorStr: String) -> UIColor {
     let formattedStr = colorStr.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    
+
     if formattedStr.hasPrefix("rgba") || formattedStr.hasPrefix("rgb") {
         let characterSet = CharacterSet(charactersIn: "0123456789.")
         let numbers = formattedStr.components(separatedBy: characterSet.inverted).filter { !$0.isEmpty }
-        
+
         if numbers.count >= 3 {
             let r = CGFloat(Double(numbers[0]) ?? 0) / 255.0
             let g = CGFloat(Double(numbers[1]) ?? 0) / 255.0
@@ -1011,15 +1081,15 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
             return UIColor(red: r, green: g, blue: b, alpha: a)
         }
     }
-    
+
     var hex = formattedStr
     if hex.hasPrefix("#") {
         hex.removeFirst()
     }
-    
+
     var rgbValue: UInt64 = 0
     Scanner(string: hex).scanHexInt64(&rgbValue)
-    
+
     if hex.count == 8 {
         return UIColor(
             red: CGFloat((rgbValue & 0x00FF0000) >> 16) / 255.0,
@@ -1035,7 +1105,7 @@ public class HybridNitroOpenMap: HybridNitroOpenMapSpec {
             alpha: 1.0
         )
     }
-    
+
     return UIColor.gray
   }
 }
