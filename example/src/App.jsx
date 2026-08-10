@@ -18,28 +18,15 @@ export default function App() {
   const [tilt] = useState(45);
 
   const [fitBoundsData, setFitBoundsData] = useState(undefined);
-  const [routeInfo, setRouteInfo] = useState(null);
-  const [routeReq, setRouteReq] = useState(undefined);
   const [isMapReady, setIsMapReady] = useState(false);
-
-  const [vehicle, setVehicle] = useState({
-    id: 'live_vehicle',
-    latitude: 28.6139,
-    longitude: 77.209,
-    title: 'Live Rider',
-    iconImage: 'https://cdn-icons-png.flaticon.com/512/741/741407.png',
-    rotation: 45,
-  });
 
   const [markersList] = useState([
     {
       id: 'marker_1',
       latitude: 28.6139,
       longitude: 77.209,
-      title: 'Car 1',
-      snippet: 'Draggable Car Marker',
-      rating: '4.8 ⭐',
-      eta: '10 mins',
+      title: 'Location 1',
+      snippet: 'Draggable Marker',
       iconImage: 'https://cdn-icons-png.flaticon.com/512/741/741407.png',
       rotation: 0,
       draggable: true,
@@ -48,10 +35,8 @@ export default function App() {
       id: 'marker_2',
       latitude: 28.62,
       longitude: 77.21,
-      title: 'Car 2',
-      snippet: 'Second Car Marker',
-      rating: '4.5 ⭐',
-      eta: '15 mins',
+      title: 'Location 2',
+      snippet: 'Second Marker',
       iconImage: 'https://cdn-icons-png.flaticon.com/512/555/555526.png',
       rotation: 90,
       draggable: false,
@@ -74,22 +59,7 @@ export default function App() {
       }
     }, 1500);
 
-    const interval = setInterval(() => {
-      setVehicle((prev) => {
-        const newLat = prev.latitude + 0.0005;
-        const newLng = prev.longitude + 0.0005;
-        const randomRotation = (prev.rotation + 15) % 360;
-        return {
-          ...prev,
-          latitude: newLat,
-          longitude: newLng,
-          rotation: randomRotation,
-        };
-      });
-    }, 3000);
-
     return () => {
-      clearInterval(interval);
       clearTimeout(timer);
     };
   }, [isMapReady]);
@@ -99,28 +69,8 @@ export default function App() {
     setFitBoundsData([
       { latitude: 28.6139, longitude: 77.209 },
       { latitude: 28.62, longitude: 77.21 },
-      { latitude: vehicle.latitude, longitude: vehicle.longitude },
     ]);
-  };
-
-  const handleFetchRoute = () => {
-    if (!isMapReady) return;
-
-    setRouteReq({
-      originLat: vehicle.latitude,
-      originLng: vehicle.longitude,
-      destLat: 28.62,
-      destLng: 77.21,
-      requestId: Date.now().toString(),
-    });
-
-    setRouteInfo({ distance: '2.50', eta: '10' });
-    Alert.alert('Success', 'Route fetch request sent to native map!');
-  };
-
-  const handleOfflineMapDownload = () => {
-    if (!isMapReady) return;
-    Alert.alert('Offline Map', 'Offline map download option triggered!');
+    Alert.alert('Fit Bounds', 'Map bounds adjusted to markers!');
   };
 
   return (
@@ -133,9 +83,7 @@ export default function App() {
         bearing={bearing}
         tilt={tilt}
         showUserLocation={true}
-        vehicleMarker={vehicle}
         fitBoundsCoords={fitBoundsData}
-        routeRequest={routeReq}
         onMapReady={() => setIsMapReady(true)}
         markers={markersList}
         polylines={[
@@ -168,18 +116,9 @@ export default function App() {
 
       <View style={styles.countBadge}>
         <Text style={styles.countText}>
-          Total Cars on Map: {markersList.length}
+          Total Markers: {markersList.length}
         </Text>
       </View>
-
-      {routeInfo && (
-        <View style={styles.routeInfoCard}>
-          <Text style={styles.routeInfoText}>
-            Distance: {routeInfo.distance} km
-          </Text>
-          <Text style={styles.routeInfoText}>ETA: {routeInfo.eta} mins</Text>
-        </View>
-      )}
 
       {!isMapReady && (
         <View style={styles.loadingBanner}>
@@ -190,24 +129,8 @@ export default function App() {
       <View style={styles.buttonContainer}>
         <View style={styles.buttonWrapper}>
           <Button
-            title="Get Route"
-            color="#d84315"
-            onPress={handleFetchRoute}
-            disabled={!isMapReady}
-          />
-        </View>
-        <View style={styles.buttonWrapper}>
-          <Button
             title="Fit Bounds"
             onPress={handleFitBounds}
-            disabled={!isMapReady}
-          />
-        </View>
-        <View style={styles.buttonWrapper}>
-          <Button
-            title="Offline Map"
-            color="#2e7d32"
-            onPress={handleOfflineMapDownload}
             disabled={!isMapReady}
           />
         </View>
@@ -230,22 +153,6 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   countText: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
-  routeInfoCard: {
-    position: 'absolute',
-    top: 50,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    elevation: 5,
-  },
-  routeInfoText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
   loadingBanner: {
     position: 'absolute',
     top: 100,
@@ -261,8 +168,6 @@ const styles = StyleSheet.create({
     bottom: 30,
     alignSelf: 'center',
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
     justifyContent: 'center',
   },
   buttonWrapper: {
