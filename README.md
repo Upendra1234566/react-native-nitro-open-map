@@ -1,10 +1,11 @@
 # react-native-nitro-open-map
+
 High-performance React Native Map component built with **Nitro Modules** and **MapLibre Native**.
 `react-native-nitro-open-map` provides a fast native map view for React Native applications with zero-bridge overhead using Nitro Modules. Built for developers who need a lightweight, high-performance alternative to existing native map solutions.
 
 ---
 
-##  Features
+## Features
 
 - Native Android and iOS rendering via MapLibre
 - Built with React Native Nitro Modules (zero bridge overhead)
@@ -128,14 +129,14 @@ const styles = StyleSheet.create({
 
 ## Props / API
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `latitude` | `number` | — | Initial latitude of the map center |
-| `longitude` | `number` | — | Initial longitude of the map center |
-| `zoom` | `number` | `14` | Initial zoom level |
-| `color` | `string` | — | Accent color used for markers/overlays |
-| `showUserLocation` | `boolean` | `false` | Show the user's current location on the map |
-| `style` | `ViewStyle` | — | Standard React Native style prop |
+| Prop               | Type        | Default | Description                                 |
+| ------------------ | ----------- | ------- | ------------------------------------------- |
+| `latitude`         | `number`    | —       | Initial latitude of the map center          |
+| `longitude`        | `number`    | —       | Initial longitude of the map center         |
+| `zoom`             | `number`    | `14`    | Initial zoom level                          |
+| `color`            | `string`    | —       | Accent color used for markers/overlays      |
+| `showUserLocation` | `boolean`   | `false` | Show the user's current location on the map |
+| `style`            | `ViewStyle` | —       | Standard React Native style prop            |
 
 ---
 

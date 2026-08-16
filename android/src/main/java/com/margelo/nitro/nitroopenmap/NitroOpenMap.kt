@@ -24,24 +24,13 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.FillLayer
-import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.permissions.PermissionsManager
 import org.maplibre.android.gestures.MoveGestureDetector
-import org.maplibre.android.offline.OfflineRegion
-import org.maplibre.android.offline.OfflineRegionError
-import org.maplibre.android.offline.OfflineRegionStatus
-import org.maplibre.android.offline.OfflineManager
-import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
-import org.json.JSONObject
-import java.net.URL
-import java.net.HttpURLConnection
-import kotlinx.coroutines.*
 
 @DoNotStrip
 class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroOpenMapSpec(), LifecycleEventListener {
@@ -50,7 +39,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
     private val mapView: MapView
     private var mapLibreMap: MapLibreMap? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var _color = "#FFFFFF"
     private var _latitude: Double? = null
@@ -61,11 +49,9 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
     private var _mapStyle: String = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"
     private var _markers: List<Marker> = emptyList()
     private var _showUserLocation: Boolean = false
-    private var _vehicleMarker: Marker? = null
     private var _fitBoundsCoords: List<LatLng>? = null
     private var _polylines: MutableList<Polyline> = mutableListOf()
     private var _polygons: List<Polygon> = emptyList()
-    private var _routeRequest: RouteRequest? = null
     
     // Callbacks & Listeners
     private var _onMarkerPress: ((String) -> Unit)? = null
@@ -128,13 +114,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
             updateUserLocationState()
         }
 
-    override var vehicleMarker: Marker?
-        get() = _vehicleMarker
-        set(value) {
-            _vehicleMarker = value
-            updateVehicleMarker()
-        }
-
     override var fitBoundsCoords: Array<com.margelo.nitro.nitroopenmap.LatLng>?
         get() = _fitBoundsCoords?.map { com.margelo.nitro.nitroopenmap.LatLng(it.latitude, it.longitude) }?.toTypedArray()
         set(value) {
@@ -156,15 +135,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
         set(value) {
             _polygons = value?.toList() ?: emptyList()
             updatePolygons()
-        }
-
-    override var routeRequest: RouteRequest?
-        get() = _routeRequest
-        set(value) {
-            _routeRequest = value
-            if (value != null) {
-                fetchAndDrawRouteNative(value.originLat, value.originLng, value.destLat, value.destLng)
-            }
         }
 
     override var onMarkerPress: ((String) -> Unit)?
@@ -211,6 +181,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                         e.printStackTrace()
                     }
 
+                    // Polygon Source & Layer
                     style.addSource(GeoJsonSource("polygon-source"))
                     style.addLayer(
                         FillLayer("polygon-layer", "polygon-source")
@@ -220,6 +191,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                             )
                     )
 
+                    // Polyline Source & Layer
                     style.addSource(GeoJsonSource("polyline-source"))
                     style.addLayer(
                         LineLayer("polyline-layer", "polyline-source")
@@ -229,36 +201,8 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                             )
                     )
 
-                    val clusterOptions = GeoJsonOptions()
-                        .withCluster(true)
-                        .withClusterMaxZoom(14)
-                        .withClusterRadius(50)
-
-                    style.addSource(GeoJsonSource("marker-source", clusterOptions))
-
-                    style.addLayer(
-                        CircleLayer("cluster-circle-layer", "marker-source")
-                            .withProperties(
-                                PropertyFactory.circleColor(Color.parseColor("#FF5722")),
-                                PropertyFactory.circleRadius(18f),
-                                PropertyFactory.circleStrokeWidth(2f),
-                                PropertyFactory.circleStrokeColor(Color.WHITE)
-                            )
-                            .withFilter(Expression.has("point_count"))
-                    )
-
-                    style.addLayer(
-                        SymbolLayer("cluster-count-layer", "marker-source")
-                            .withProperties(
-                                PropertyFactory.textField("{point_count}"),
-                                PropertyFactory.textSize(12f),
-                                PropertyFactory.textColor(Color.WHITE),
-                                PropertyFactory.textAnchor(Property.TEXT_ANCHOR_CENTER),
-                                PropertyFactory.textJustify(Property.TEXT_JUSTIFY_CENTER)
-                            )
-                            .withFilter(Expression.has("point_count"))
-                    )
-
+                    // Standard Marker Source & Layer (Without heavy clustering for free version)
+                    style.addSource(GeoJsonSource("marker-source"))
                     style.addLayer(
                         SymbolLayer("marker-layer", "marker-source")
                             .withProperties(
@@ -274,25 +218,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                                 PropertyFactory.iconAllowOverlap(true),
                                 PropertyFactory.textAllowOverlap(false)
                             )
-                            .withFilter(Expression.not(Expression.has("point_count")))
-                    )
-
-                    style.addSource(GeoJsonSource("vehicle-source"))
-                    style.addLayer(
-                        SymbolLayer("vehicle-layer", "vehicle-source")
-                            .withProperties(
-                                PropertyFactory.textField("{title}"),
-                                PropertyFactory.textSize(14f),
-                                PropertyFactory.textColor(Color.BLUE),
-                                PropertyFactory.textOffset(arrayOf(0f, 1.8f)),
-                                PropertyFactory.textAnchor("top"),
-                                PropertyFactory.iconImage("{iconImage}"),
-                                PropertyFactory.iconSize(0.3f),
-                                PropertyFactory.iconRotate(Expression.get("rotation")),
-                                PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
-                                PropertyFactory.iconAllowOverlap(true),
-                                PropertyFactory.textAllowOverlap(false)
-                            )
                     )
 
                     mapLoaded = true
@@ -300,7 +225,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                     updateCamera()
                     updateMarkers()
                     updateUserLocationState()
-                    updateVehicleMarker()
                     updatePolylines()
                     updatePolygons()
                 }
@@ -308,7 +232,7 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                 map.addOnMapClickListener { point ->
                     val pixel = map.projection.toScreenLocation(point)
                     val rect = RectF(pixel.x - 50f, pixel.y - 50f, pixel.x + 50f, pixel.y + 50f)
-                    val features = map.queryRenderedFeatures(rect, "marker-layer", "vehicle-layer", "cluster-circle-layer")
+                    val features = map.queryRenderedFeatures(rect, "marker-layer")
                     
                     if (features.isNotEmpty()) {
                         val clickedFeature = features[0]
@@ -359,109 +283,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
 
     override fun isMapReady(): Promise<Boolean> {
         return Promise.resolved(mapLoaded)
-    }
-
-    override fun downloadOfflineRegion(
-        swLat: Double,
-        swLng: Double,
-        neLat: Double,
-        neLng: Double,
-        minZoom: Double,
-        maxZoom: Double,
-        regionName: String
-    ) {
-        val map = mapLibreMap ?: return
-        if (!mapLoaded) return
-
-        mainHandler.post {
-            map.style?.url?.let { styleUrl ->
-                val bounds = LatLngBounds.Builder()
-                    .include(LatLng(neLat, neLng))
-                    .include(LatLng(swLat, swLng))
-                    .build()
-
-                val definition = OfflineTilePyramidRegionDefinition(
-                    styleUrl,
-                    bounds,
-                    minZoom,
-                    maxZoom,
-                    context.resources.displayMetrics.density
-                )
-
-                val metadataJson = JSONObject().apply {
-                    put("NAME", regionName)
-                }
-                val metadata = metadataJson.toString().toByteArray(Charsets.UTF_8)
-
-                val offlineManager = OfflineManager.getInstance(context.applicationContext)
-                offlineManager.createOfflineRegion(
-                    definition,
-                    metadata,
-                    object : OfflineManager.CreateOfflineRegionCallback {
-                        override fun onCreate(offlineRegion: OfflineRegion) {
-                            offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
-                            offlineRegion.setObserver(object : OfflineRegion.OfflineRegionObserver {
-                                override fun onStatusChanged(status: OfflineRegionStatus) {
-                                    if (status.isComplete) {
-                                        // Download complete logic if needed
-                                    }
-                                }
-                                override fun onError(error: OfflineRegionError) {}
-                                override fun mapboxTileCountLimitExceeded(limit: Long) {}
-                            })
-                        }
-                        override fun onError(error: String) {}
-                    }
-                )
-            }
-        }
-    }
-
-    private fun fetchAndDrawRouteNative(originLat: Double, originLng: Double, destLat: Double, destLng: Double) {
-        if (!mapLoaded) return
-
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                val urlStr = "https://router.project-osrm.org/route/v1/driving/$originLng,$originLat;$destLng,$destLat?geometries=geojson&overview=full"
-                val url = URL(urlStr)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-
-                if (connection.responseCode == 200) {
-                    val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    val json = JSONObject(response)
-                    val routes = json.optJSONArray("routes")
-
-                    if (routes != null && routes.length() > 0) {
-                        val route = routes.getJSONObject(0)
-                        val geometry = route.getJSONObject("geometry")
-                        val coordinates = geometry.getJSONArray("coordinates")
-
-                        val routeCoords = ArrayList<com.margelo.nitro.nitroopenmap.LatLng>()
-                        for (i in 0 until coordinates.length()) {
-                            val pt = coordinates.getJSONArray(i)
-                            routeCoords.add(com.margelo.nitro.nitroopenmap.LatLng(pt.getDouble(1), pt.getDouble(0)))
-                        }
-
-                        val newPoly = Polyline(
-                            id = "osrm_route_${System.currentTimeMillis()}",
-                            coordinates = routeCoords.toTypedArray(),
-                            color = "#3388FF",
-                            width = 6.0
-                        )
-
-                        _polylines.removeAll { it.id?.startsWith("osrm_route_") == true }
-                        _polylines.add(newPoly)
-                        
-                        withContext(Dispatchers.Main) {
-                            updatePolylines()
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
 
     private fun updateCamera() {
@@ -520,13 +341,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
 
     private fun updateMarkers() {
         if (!mapLoaded) return
-        _markers.forEach { marker ->
-            val img = marker.iconImage
-            if (!img.isNullOrEmpty() && (img.startsWith("http://") || img.startsWith("https://"))) {
-                downloadAndAddImage(img)
-            }
-        }
-
         val features = _markers.joinToString(separator = ",", prefix = "{ \"type\": \"FeatureCollection\", \"features\": [", postfix = "] }") { marker ->
             val icon = if (marker.iconImage.isNullOrEmpty()) "default_marker_icon" else marker.iconImage!!
             """
@@ -540,9 +354,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
                 "id": "${marker.id ?: ""}",
                 "title": "${marker.title ?: ""}",
                 "snippet": "${marker.snippet ?: ""}",
-                "rating": "${marker.rating ?: ""}",
-                "eta": "${marker.eta ?: ""}",
-                "color": "${marker.color ?: "#FF0000"}",
                 "iconImage": "$icon",
                 "rotation": ${marker.rotation ?: 0.0},
                 "draggable": ${marker.draggable ?: false}
@@ -555,42 +366,6 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
             mapLibreMap?.getStyle { style ->
                 val source = style.getSourceAs<GeoJsonSource>("marker-source")
                 source?.setGeoJson(features)
-            }
-        }
-    }
-
-    private fun updateVehicleMarker() {
-        val vehicle = _vehicleMarker ?: return
-        if (!mapLoaded) return
-        val img = vehicle.iconImage
-        if (!img.isNullOrEmpty() && (img.startsWith("http://") || img.startsWith("https://"))) {
-            downloadAndAddImage(img)
-        }
-
-        val icon = if (vehicle.iconImage.isNullOrEmpty()) "default_marker_icon" else vehicle.iconImage!!
-        val featureJson = """
-        {
-          "type": "FeatureCollection",
-          "features": [{
-            "type": "Feature",
-            "geometry": {
-              "type": "Point",
-              "coordinates": [${vehicle.longitude}, ${vehicle.latitude}]
-            },
-            "properties": {
-              "id": "${vehicle.id ?: "live_vehicle"}",
-              "title": "${vehicle.title ?: ""}",
-              "iconImage": "$icon",
-              "rotation": ${vehicle.rotation ?: 0.0}
-            }
-          }]
-        }
-        """.trimIndent()
-
-        mainHandler.post {
-            mapLibreMap?.getStyle { style ->
-                val source = style.getSourceAs<GeoJsonSource>("vehicle-source")
-                source?.setGeoJson(featureJson)
             }
         }
     }
@@ -703,40 +478,12 @@ class HybridNitroOpenMap(private val context: ThemedReactContext) : HybridNitroO
         }
     }
 
-    private fun downloadAndAddImage(urlStr: String) {
-        mapLibreMap?.getStyle { style ->
-            if (style.getImage(urlStr) == null) {
-                coroutineScope.launch(Dispatchers.IO) {
-                    try {
-                        val url = URL(urlStr)
-                        val bmp = BitmapFactory.decodeStream(url.openConnection().getInputStream())
-                        if (bmp != null) {
-                            withContext(Dispatchers.Main) {
-                                mapLibreMap?.getStyle { currentStyle ->
-                                    if (currentStyle.getImage(urlStr) == null) {
-                                        currentStyle.addImage(urlStr, bmp)
-                                        updateMarkers()
-                                        updateVehicleMarker()
-                                    }
-                                }
-                            }
-                        }
-                    } catch (e: Exception) { e.printStackTrace() }
-                }
-            }
-        }
-    }
-
     override fun onHostResume() { mainHandler.post { mapView.onResume() } }
     override fun onHostPause() { mainHandler.post { mapView.onPause() } }
-    override fun onHostDestroy() { 
-        coroutineScope.cancel()
-        mainHandler.post { mapView.onDestroy() } 
-    }
+    override fun onHostDestroy() { mainHandler.post { mapView.onDestroy() } }
     
     override fun onDropView() {
         context.removeLifecycleEventListener(this)
-        coroutineScope.cancel()
         mainHandler.post { mapView.onDestroy() }
         super.onDropView()
     }
