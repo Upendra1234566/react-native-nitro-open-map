@@ -1,6 +1,6 @@
 {
   "name": "react-native-nitro-open-map",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "High-performance React Native maps library built with Nitro Modules.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
